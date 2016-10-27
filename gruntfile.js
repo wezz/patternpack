@@ -3,7 +3,8 @@ module.exports = function (grunt) {
 
   var _ = require("lodash");
   var log = require("./gruntLogHelper.js")(grunt);
-  var basePath = require("path").dirname(grunt.option("gruntfile"));
+  var gruntfilePath = grunt.option("gruntfile") || ".";
+  var basePath = require("path").dirname(gruntfilePath);
   var autoprefixer = require("autoprefixer");
 
   var gruntFileConfig = basePath + "/gruntfileConfig.json";
@@ -50,10 +51,31 @@ module.exports = function (grunt) {
   // this should return the array in the same order it was configured
   // this is important because the styles may need to be processed in a
   // specific order for css cascading needs.
-  function allPatternStructurePaths(path) {
-    return _.map(config.patternStructure, function (structure) {
-      return getPath(config.src + "/" + structure.path, path);
-    });
+  function allPatternStructurePaths(paths)
+  {
+  	var result = []
+  	if (typeof paths === "string")
+  	{
+  		result = _.map(config.patternStructure, function (structure)
+  		{
+  			return getPath(config.src + "/" + structure.path, paths);
+  		});
+  	}
+  	else
+  	{
+  		for (let key in paths)
+  		{
+  			let path = paths[key];
+  			let isExclude = (path.indexOf('!') === 0);
+  			let excludeString = isExclude ? '!' : '';
+  			path = path.substr((isExclude) ? 1 : 0);
+  			result = result.concat(result,_.map(config.patternStructure, function (structure)
+  			{
+  				return getPath(excludeString + config.src + "/" + structure.path, path);
+  			}));
+  		}
+  	}
+  	return result;
   }
 
   function getBuildTasks(tasksConfig) {
@@ -237,27 +259,64 @@ module.exports = function (grunt) {
         compress: true
       },
       patterns: {
-        files: [
-          {
-            src: assets("/less/" + config.css.fileName + ".less"),
-            dest: assets("/css/" + config.css.fileName + ".css")
-          }
-        ]
+      	files: (function ()
+      	{
+      		var result = [];
+      		if (typeof config.css.targets === "object")
+      		{
+      			for (let key in config.css.targets)
+      			{
+      				result.push({
+      					src: assets("/less/_patternpack-patterns-" + key + ".less"),
+      					dest: assets("/css/"+ key + ".css")
+      				});
+      			}
+      		}
+      		else
+      		{
+      			result.push(
+				{
+					src: assets("/less/" + config.css.fileName + ".less"),
+					dest: assets("/css/" + config.css.fileName + ".css")
+				});
+      		}
+
+      		return result;
+      	})()
       }
     },
 
     // Import all sass styles defined for patterns
     // Use the pattern structures to ensure that the styles are processed
     // in the specific order the user configures.
-    "sass_globbing": {
-      sass: {
-        src: allPatternStructurePaths("/**/*.scss"),
-        dest: assets("/sass/_patternpack-patterns.scss")
-      },
-      less: {
-        src: allPatternStructurePaths("/**/*.less"),
-        dest: assets("/less/_patternpack-patterns.less")
-      }
+    "sass_globbing":
+	{
+		sass:
+		{
+			src: allPatternStructurePaths("/**/*.scss"),
+			dest: assets("/sass/_patternpack-patterns.scss")
+		  },
+		less:
+		(function ()
+		{
+			if (typeof config.css.targets === "object")
+			{
+				var result = {};
+				for (let key in config.css.targets)
+				{
+					result[assets("/less/_patternpack-patterns-" + key + ".less")] = allPatternStructurePaths(config.css.targets[key]);
+					
+				}
+				return { "files": result };
+			}
+			else
+			{
+				return {
+					src: allPatternStructurePaths("/**/*.less"),
+					dest: assets("/less/_patternpack-patterns.less")
+				};
+			}
+		})()
     },
 
     // Run PostCSS Autoprefixer on any CSS in the assets directory
