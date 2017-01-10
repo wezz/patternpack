@@ -270,9 +270,9 @@ module.exports = function (grunt)
 
 		less: {
 			options: {
-				sourceMap: true,
+				sourceMap: false,
 				outputSourceFiles: true,
-				compress: true
+				compress: false
 			},
 			patterns: {
 				files: (function ()
